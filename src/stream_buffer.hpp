@@ -29,12 +29,49 @@ class stream_buffer {
         stream_buffer(): m_first(nullptr), m_last(nullptr), m_size(0){}
         explicit stream_buffer(const void* src, std::size_t size): stream_buffer(){
             put(src, size);
-        };
-        explicit stream_buffer(stream_buffer&& rhs):stream_buffer(){}
+        }
+
         stream_buffer(const stream_buffer& rhs): stream_buffer(){
             put(rhs);
-        };
-        void put(const void* src, std::size_t size){}
+        }
+
+        stream_buffer(stream_buffer&& rhs):stream_buffer(){
+            rhs.swap(*this);
+        }
+
+        stream_buffer& operator = (const stream_buffer& rhs){
+            stream_buffer(rhs).swap(*this);
+            return *this;
+        }
+
+        stream_buffer& operator = (stream_buffer&& rhs){
+            rhs.swap(*this);
+            return *this;
+        }
+
+
+        void put(const void* src, std::size_t size){
+        }
+
+        void put(const stream_buffer& rhs){
+        }
+
+        ~stream_buffer(){
+            m_size = 0;
+            auto ptr = m_first;
+            while(ptr != nullptr){
+                auto tmp = ptr->next;
+                line::destory(ptr);
+                ptr = tmp;
+            }
+        }
+
+        void swap(stream_buffer& rhs){
+            using std::swap;
+            swap(m_first, rhs.m_first);
+            swap(m_last, rhs.m_last);
+            swap(m_size, rhs.m_size);
+        }
     private:
         line* m_first;
         line* m_last;
