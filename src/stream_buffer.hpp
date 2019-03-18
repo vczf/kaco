@@ -13,11 +13,22 @@ struct line {
         tmp->end = 0;
         tmp->capacity = capacity - sizeof(line);
         return tmp;
-
     }   
     static void destory(line* tmp){
         ::operator delete(tmp);
     }   
+    void trim(){
+        auto used = end - begin;
+        memmove(data ,data + begin, used);
+        begin = 0;
+        end = used;
+    }
+    void* dest(){
+        return data + begin;
+    }
+    std::size_t count(){
+        return end - begin;
+    }
     line *next;
     std::size_t begin, end;
     std::size_t capacity;
@@ -49,13 +60,39 @@ class stream_buffer {
             return *this;
         }
 
-
-        void put(const void* src, std::size_t size){
+        void put(const void* src, std::size_t count){
+            gen(count);
+            auto chunk = m_last;
+            memcpy(chunk->dest(), src, count);
+            chunk->end += count;
+            m_size +=count;
         }
 
-        void put(const stream_buffer& rhs){
+        void put(const stream_buffer& data){
+            auto count = data.size();
+            gen(count);
+            for(auto src = data.m_first; src; src = src->next){
+                memcpy(m_last->dest(), src->dest(), src->count());
+                m_last->end += src->count();
+            }
+            m_size +=count;
         }
-
+        
+        bool get(void* dst, std::size_t count){
+            if(m_size < count) return false;
+            auto chunk = m_first;
+            std::size_t num = 0;
+            while(num < count){
+                auto tmp_count = std::min(count - num, chunk->count());
+                memcpy(static_cast<unsigned char*>(dst) + num, chunk->dest(), tmp_count);
+                num += tmp_count;
+                chunk->begin += tmp_count;
+                chunk = chunk->next;
+            }
+            m_size -= count;
+            clear();
+        }
+        
         ~stream_buffer(){
             m_size = 0;
             auto ptr = m_first;
@@ -72,7 +109,37 @@ class stream_buffer {
             swap(m_last, rhs.m_last);
             swap(m_size, rhs.m_size);
         }
+        std::size_t size() const{
+            return m_size;
+        }
     private:
+        void gen(std::size_t count){
+            auto chunk = m_last;
+            if(chunk && chunk->capacity - chunk->end < count ){
+                auto avail = chunk->count();
+                if(chunk->capacity - avail >= count){
+                    chunk->trim();
+                }
+                else{
+                    chunk = nullptr;
+                }
+            }
+            if(nullptr == chunk){
+                chunk = line::create(count);
+                (nullptr == m_last ? m_first : m_last->next) = chunk;
+                m_last = chunk;
+            }
+        }
+        void clear(){
+            auto chunk = m_first;
+            while(chunk && chunk->next && chunk->end == chunk->begin){
+                auto tmp = chunk->next;
+                line::destory(chunk);
+                chunk = tmp;
+                m_first = tmp;
+                chunk = chunk->next;
+            }
+        }
         line* m_first;
         line* m_last;
         std::size_t m_size;

@@ -6,6 +6,7 @@
 #include <stack>
 #include <memory>
 #include <array>
+#include <string.h>
 
 
 #ifndef KACO_CACHE_SIZE
