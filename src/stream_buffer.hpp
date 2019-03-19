@@ -23,9 +23,6 @@ struct line {
         begin = 0;
         end = used;
     }
-    void* dest(){
-        return data + begin;
-    }
     std::size_t count(){
         return end - begin;
     }
@@ -63,7 +60,7 @@ class stream_buffer {
         void put(const void* src, std::size_t count){
             gen(count);
             auto chunk = m_last;
-            memcpy(chunk->dest(), src, count);
+            memcpy(chunk->data + chunk->end, src, count);
             chunk->end += count;
             m_size +=count;
         }
@@ -72,7 +69,7 @@ class stream_buffer {
             auto count = data.size();
             gen(count);
             for(auto src = data.m_first; src; src = src->next){
-                memcpy(m_last->dest(), src->dest(), src->count());
+                memcpy(m_last->data + m_last->end, src->data + src->begin, src->count());
                 m_last->end += src->count();
             }
             m_size +=count;
@@ -84,13 +81,22 @@ class stream_buffer {
             std::size_t num = 0;
             while(num < count){
                 auto tmp_count = std::min(count - num, chunk->count());
-                memcpy(static_cast<unsigned char*>(dst) + num, chunk->dest(), tmp_count);
+                memcpy(static_cast<unsigned char*>(dst) + num, chunk->data + chunk->begin, tmp_count);
                 num += tmp_count;
                 chunk->begin += tmp_count;
-                chunk = chunk->next;
+                if(chunk->next && chunk->end == chunk->begin){
+                    auto tmp = chunk->next;
+                    line::destory(chunk);
+                    chunk = tmp;
+                    m_first = tmp;
+                }
+                else{
+                    chunk = chunk->next;
+                }
             }
             m_size -= count;
             clear();
+            return true;
         }
         
         ~stream_buffer(){
@@ -128,16 +134,6 @@ class stream_buffer {
                 chunk = line::create(count);
                 (nullptr == m_last ? m_first : m_last->next) = chunk;
                 m_last = chunk;
-            }
-        }
-        void clear(){
-            auto chunk = m_first;
-            while(chunk && chunk->next && chunk->end == chunk->begin){
-                auto tmp = chunk->next;
-                line::destory(chunk);
-                chunk = tmp;
-                m_first = tmp;
-                chunk = chunk->next;
             }
         }
         line* m_first;
